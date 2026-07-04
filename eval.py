@@ -1,6 +1,5 @@
 import torch
 from train import MyClassifier, INPUT_DIM, OUTPUT_DIM, DEVICE,NUM_LAYERS,LEN,BATCH_SIZE,L,PATH,M
-from torch.utils.data import DataLoader
 import random
 import heapq
 import math

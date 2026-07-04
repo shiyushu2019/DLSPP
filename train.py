@@ -3,9 +3,8 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader
 from DataGenerator import FakeList, MapRouteDataset
 
 PATH="checkpoint/model.pth"
