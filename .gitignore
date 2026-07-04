@@ -1,0 +1,16 @@
+nohup.out
+# Python
+__pycache__/
+*.pyc
+build/
+
+# model checkpoints
+checkpoint/
+
+# logs
+logs/
+runs/
+
+# system
+.DS_Store
+.vscode/
