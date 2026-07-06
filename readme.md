@@ -85,7 +85,7 @@ So far, I have made the following progress:
 
 I set hyperparameters as follows:
 
-```
+```python
 L = 10 # Number of nodes
 M = 10 # Range of weights
 
