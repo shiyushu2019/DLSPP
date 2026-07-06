@@ -79,6 +79,25 @@ class OurDataset:
 
 Unlike conventional machine learning settings with fixed datasets, our data can be generated on the fly, allowing for effectively unlimited training samples. Therefore, the notion of an epoch becomes less meaningful in our setting.
 
+## Current Progress
 
------------------
-This is an experimental personal project. The code is incomplete and may not work properly.
+So far, I have made the following progress:
+
+I set hyperparameters as follows:
+
+```
+L = 10 # Number of nodes
+M = 10 # Range of weights
+
+NUM_LAYERS = 10 # Number of Linear layers
+HIDDEN_SIZE=int(4096*3)
+NUM_POOLINGS=1
+
+LR = 0.001 
+BATCH_SIZE = 512
+MOMENTUM = 0.9 
+DROP_OUT=0.05
+WEIGHT_DECAY = 1e-4 
+```
+
+Up to now, the model has been trained for 572,495 batches over approximately 45 hours, achieving a validation accuracy of 0.98, where the task is to predict the next node along the optimal path given a graph, a source node, and a target node.
