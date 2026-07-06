@@ -13,17 +13,23 @@ The second challenge is how to let the model know the source and target nodes, a
 </p>
 
 For example, let **π** be the model, and **G** the input graph, and **[a, b, c, d]** the optimal path. Then:
+
 $$
 π(G, a, d) = b 
 $$
+
 Next, use the optimal next step 'b' as current node:
+
 $$
 π(G, b, d) = c 
 $$
+
 Repeat it:
+
 $$
 π(G, c, d) = d
 $$
+
 By repeatedly applying π, the full optimal path **[a, b, c, d]** can be recovered.
 
 Therefore, our current task can be simplified to designing a model that takes a graph G, a source, and a target as input, and predicts the next node on the optimal path.
