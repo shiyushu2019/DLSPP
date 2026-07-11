@@ -1,4 +1,5 @@
-runner/*
+runner/
+train_log.txt
 
 nohup.out
 # Python
