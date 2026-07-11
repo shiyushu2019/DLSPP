@@ -5,18 +5,19 @@ import heapq
 import math
 from typing import Union, List, Sequence
 from tqdm import tqdm
+import numpy as np
 
+Tolerance=1e-6  # 设置一个容忍度，用于浮点数比较
 
-IT_rng = random.Random(int(1e19))
-# 1. 邻接矩阵统计量 (依赖 M)
-adj_mean = (1 + M) / 2
-adj_std = math.sqrt((M**2 - 1) / 12)
+"""abbanden correspondence of indexes, use global random generator"""
+"""mluti-ans is considered"""
+#IT_rng = random.Random(int(1e19))
+IT_rng = np.random.default_rng(int(1e19))
 
-# 2. 坐标统计量 (依赖 L)
+adj_mean = (M - 1) / 2
+adj_std = math.sqrt(((M - 1) ** 2) / 12)
 coord_mean = (L - 1) / 2
-coord_std = math.sqrt((L**2 - 1) / 12)
-
-# 3. 拼接成完整张量 (自动适应 L 的变化)
+coord_std = math.sqrt((L ** 2 - 1) / 12)
 mean = torch.tensor(
     [adj_mean] * (L * L) + [coord_mean] * 2,
     dtype=torch.float32
@@ -26,15 +27,12 @@ std = torch.tensor(
     dtype=torch.float32
 )
 
-def generate_random_adjacency(n, rng=None,seed_bia=1,low=1, high=10):
+def generate_random_adjacency(n, rng=None,low=1, high=10):
     """生成 n×n 随机邻接矩阵（完全图，正权）"""
-    mat = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if i != j:
-                #for _ in range(seed_bia):
-                #    mat[i][j] = rng.randint(low, high)
-                mat[i][j] = rng.randint(low, high)
+    if low == 0:
+        low = 1e-18  # avoid zero weights
+    mat = rng.uniform(low, high, size=(n, n)).astype(np.float32)
+    np.fill_diagonal(mat, 0)
     return mat
 
 def dijkstra(adj, start, end):
@@ -87,15 +85,18 @@ if __name__ == "__main__":
     with torch.no_grad():
         for _ in tqdm(range(TEST_LEN),mininterval=1):
             while(True):
-                adj = generate_random_adjacency(L,rng=IT_rng,seed_bia=3,low=1,high=M)
-                start,end = IT_rng.sample(range(L), 2)
+                #adj = generate_random_adjacency(L,rng=IT_rng,low=1,high=M)
+                adj = generate_random_adjacency(L, rng=IT_rng,low=0,high=M-1)
+                #start,end = IT_rng.sample(range(L), 2)
+                start, end = IT_rng.choice(L, size=2, replace=False)
                 Min,path = dijkstra(adj,start,end)
                 assert len(path)>1, "fix me"
                 if len(path)==2:
                     continue #只要路径长度大于等于3的
                 else:
                     break
-            flat = [val for row in adj for val in row] + [start, end]
+            #flat = [val for row in adj for val in row] + [start, end]
+            flat = adj.flatten().tolist() + [start, end]
             map_tensor = torch.tensor(flat, dtype=torch.float32)
             map_tensor = (map_tensor - mean) / (std + 1e-8)
             batch=map_tensor.unsqueeze(0)
@@ -113,8 +114,8 @@ if __name__ == "__main__":
                 if new_length==None:
                     continue
                 ans_length =  new_length +  adj[start][preds]
-                assert ans_length >= Min , "fix me"
-                if ans_length==Min:
+                assert ans_length - Min<=Tolerance , "fix me"
+                if abs(ans_length-Min) <= Tolerance:
                     right+=1
 
 
