@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from DataGenerator import FakeList, MapRouteDataset
 
-PATH="checkpoint/model.pth"
+PATH="checkpoint/add-residual/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(5e8)
 L = 10
@@ -32,7 +32,7 @@ PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
 MININTERVAL=10
-REVERSE_G=25
+REVERSE_G=0
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -59,28 +59,6 @@ class ResidualBlock(nn.Module):
         out = self.drop(out)
         # 5. 残差连接
         return residual + out
-
-        """
-class ResidualBlock(nn.Module):
-    def __init__(self, dim, dropout):
-        super().__init__()
-        self.norm = nn.LayerNorm(dim)
-        # 先降维再升维（类似 FFN），引入“瓶颈”，减少参数量且增加非线性
-        self.linear1 = nn.Linear(dim, dim * 2)  # 扩展
-        self.linear2 = nn.Linear(dim * 2, dim)  # 压缩
-        self.act = nn.SiLU()
-        self.drop = nn.Dropout(dropout)
-        
-    def forward(self, x):
-        residual = x
-        out = self.norm(x)
-        out = self.linear1(out)
-        out = self.act(out)
-        out = self.drop(out)
-        out = self.linear2(out)
-        out = self.drop(out)  # 第二层后也可加 dropout
-        return residual + out
-        """
 
 class MyClassifier(nn.Module):
     def __init__(self, in_dim, out_dim, num_layers):
