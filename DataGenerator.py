@@ -2,19 +2,14 @@ import random
 import heapq
 import torch
 import math
+import numpy as np
 
-def generate_random_adjacency(n, rng=None,seed_bia=1,low=1, high=10):
+def generate_random_adjacency(n, rng=None,low=1, high=10):
     """生成 n×n 随机邻接矩阵（完全图，正权）"""
-    mat = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if i != j:
-                #for _ in range(seed_bia):
-                #    mat[i][j] = rng.randint(low, high)
-                x=rng.uniform(low, high)
-                while x==0:
-                    x=rng.uniform(low, high)
-                mat[i][j] = x
+    if low == 0:
+        low = 1e-18  # avoid zero weights
+    mat = rng.uniform(low, high, size=(n, n), dtype=np.float32)
+    np.fill_diagonal(mat, 0)
     return mat
 
 def dijkstra(adj, start, end):
@@ -62,17 +57,15 @@ class FakeList():
         if index>self.length-1:
             raise ValueError("Index out of range")
 
-        rng = random.Random(index+int(1e18)*self.seed_bia)   # 独立随机生成器
+        #rng = random.Random(index+int(1e18)*self.seed_bia)   # 独立随机生成器
+        rng = np.random.default_rng(index+int(1e18)*self.seed_bia)  # 改用 numpy 的随机生成器
 
         n = self.L # 节点数
 
         while True:
-            #start, end = random.sample(range(n), 2)
-            #adj = generate_random_adjacency(n)
-            #for _ in range(self.seed_bia):
-            #    start, end = rng.sample(range(n), 2)
-            start, end = rng.sample(range(n), 2)
-            adj = generate_random_adjacency(n, rng=rng,seed_bia=self.seed_bia,low=0,high=self.M-1)
+            #start, end = rng.sample(range(n), 2)
+            start, end = rng.choice(n, size=2, replace=False) # 改用 numpy 的 choice 方法选择两个不同的节点
+            adj = generate_random_adjacency(n, rng=rng,low=0,high=self.M-1)
             _, path = dijkstra(adj, start, end)  # 完全图保证路径存在
 
             assert len(path)>1, "fix me"
@@ -116,7 +109,8 @@ class MapRouteDataset:
         
         # 展平 map：邻接矩阵 (10x10) + [start, end]
         adj, [start, end] = sample["map"]
-        flat = [val for row in adj for val in row] + [start, end]
+        #flat = [val for row in adj for val in row] + [start, end]
+        flat = adj.flatten().tolist() + [start, end]
         map_tensor = torch.tensor(flat, dtype=torch.float32)
         map_tensor = (map_tensor - self.mean) / (self.std + 1e-8)
         
