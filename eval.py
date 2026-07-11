@@ -114,7 +114,7 @@ if __name__ == "__main__":
                 if new_length==None:
                     continue
                 ans_length =  new_length +  adj[start][preds]
-                assert ans_length - Min<=Tolerance , "fix me"
+                assert ans_length >= Min, "fix me"
                 if abs(ans_length-Min) <= Tolerance:
                     right+=1
 
