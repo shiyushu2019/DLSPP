@@ -11,7 +11,10 @@ def generate_random_adjacency(n, rng=None,seed_bia=1,low=1, high=10):
             if i != j:
                 #for _ in range(seed_bia):
                 #    mat[i][j] = rng.randint(low, high)
-                mat[i][j] = rng.randint(low, high)
+                x=rng.uniform(low, high)
+                while x==0:
+                    x=rng.uniform(low, high)
+                mat[i][j] = x
     return mat
 
 def dijkstra(adj, start, end):
@@ -69,7 +72,7 @@ class FakeList():
             #for _ in range(self.seed_bia):
             #    start, end = rng.sample(range(n), 2)
             start, end = rng.sample(range(n), 2)
-            adj = generate_random_adjacency(n, rng=rng,seed_bia=self.seed_bia,low=1,high=self.M)
+            adj = generate_random_adjacency(n, rng=rng,seed_bia=self.seed_bia,low=0,high=self.M-1)
             _, path = dijkstra(adj, start, end)  # 完全图保证路径存在
 
             assert len(path)>1, "fix me"
@@ -87,16 +90,11 @@ class MapRouteDataset:
         self.fakelist = fakelist
         self.L=L
         self.M = M
-        
-        # 1. 邻接矩阵统计量 (依赖 M)
-        adj_mean = (1 + M) / 2
-        adj_std = math.sqrt((M**2 - 1) / 12)
-        
-        # 2. 坐标统计量 (依赖 L)
+
+        adj_mean = (M - 1) / 2
+        adj_std = math.sqrt(((M - 1) ** 2) / 12)
         coord_mean = (L - 1) / 2
-        coord_std = math.sqrt((L**2 - 1) / 12)
-        
-        # 3. 拼接成完整张量 (自动适应 L 的变化)
+        coord_std = math.sqrt((L ** 2 - 1) / 12)
         self.mean = torch.tensor(
             [adj_mean] * (L * L) + [coord_mean] * 2,
             dtype=torch.float32
@@ -105,7 +103,7 @@ class MapRouteDataset:
             [adj_std] * (L * L) + [coord_std] * 2,
             dtype=torch.float32
         )
-
+        
     def __len__(self):
         return len(self.fakelist)
         
@@ -120,7 +118,6 @@ class MapRouteDataset:
         adj, [start, end] = sample["map"]
         flat = [val for row in adj for val in row] + [start, end]
         map_tensor = torch.tensor(flat, dtype=torch.float32)
-        # 标准化 (此时已归一化)
         map_tensor = (map_tensor - self.mean) / (self.std + 1e-8)
         
         # route 的第二个元素（第1个中间节点）
