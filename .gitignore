@@ -1,3 +1,5 @@
+runner/*
+
 nohup.out
 # Python
 __pycache__/
