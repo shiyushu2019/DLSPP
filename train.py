@@ -38,8 +38,49 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ---------- 模型定义 ----------
-import torch
-import torch.nn as nn
+class ResidualBlock(nn.Module):
+    def __init__(self, dim, dropout):
+        super().__init__()
+        # 标准 Pre-Norm 结构：先归一化，再线性变换，再激活
+        self.norm = nn.LayerNorm(dim)
+        self.linear = nn.Linear(dim, dim)
+        self.act = nn.SiLU()
+        self.drop = nn.Dropout(dropout)
+        
+    def forward(self, x):
+        residual = x
+        # 1. 先对输入 x 做 LayerNorm（关键改动）
+        out = self.norm(x)
+        # 2. 再做线性变换
+        out = self.linear(out)
+        # 3. 激活
+        out = self.act(out)
+        # 4. Dropout（如果有）
+        out = self.drop(out)
+        # 5. 残差连接
+        return residual + out
+
+        """
+class ResidualBlock(nn.Module):
+    def __init__(self, dim, dropout):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        # 先降维再升维（类似 FFN），引入“瓶颈”，减少参数量且增加非线性
+        self.linear1 = nn.Linear(dim, dim * 2)  # 扩展
+        self.linear2 = nn.Linear(dim * 2, dim)  # 压缩
+        self.act = nn.SiLU()
+        self.drop = nn.Dropout(dropout)
+        
+    def forward(self, x):
+        residual = x
+        out = self.norm(x)
+        out = self.linear1(out)
+        out = self.act(out)
+        out = self.drop(out)
+        out = self.linear2(out)
+        out = self.drop(out)  # 第二层后也可加 dropout
+        return residual + out
+        """
 
 class MyClassifier(nn.Module):
     def __init__(self, in_dim, out_dim, num_layers):
@@ -72,18 +113,17 @@ class MyClassifier(nn.Module):
         prev_dim = self.conv_out_dim + extra_dim  
 
         # 后续 MLP
-
-        hidden_size = HIDDEN_SIZE   # 可调整，也可作为参数传入
-        layers = []
-        # 如果 num_layers == 1，则直接输出（但通常不会，因为任务复杂）
-        for i in range(num_layers - 1):
-            layers.append(nn.Linear(prev_dim, hidden_size))
-            layers.append(nn.LayerNorm(hidden_size))
-            layers.append(nn.SiLU())
-            layers.append(nn.Dropout(p=DROP_OUT))
-            prev_dim = hidden_size
-        layers.append(nn.Linear(prev_dim, out_dim))
-        self.mlp = nn.Sequential(*layers)
+        hidden_size = HIDDEN_SIZE
+        mlp_modules = []
+        mlp_modules.append(nn.LayerNorm(prev_dim))         
+        mlp_modules.append(nn.Linear(prev_dim, hidden_size))
+        mlp_modules.append(nn.SiLU())
+        mlp_modules.append(nn.Dropout(p=DROP_OUT))          
+        for _ in range(num_layers - 2):
+            mlp_modules.append(ResidualBlock(hidden_size, DROP_OUT))
+        mlp_modules.append(nn.LayerNorm(hidden_size))
+        mlp_modules.append(nn.Linear(hidden_size, out_dim))
+        self.mlp = nn.Sequential(*mlp_modules)
 
     def forward(self, x):
         grid = x[:, :L*L].view(-1, 1, L, L)   # (batch, 1, 50, 50)
