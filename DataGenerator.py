@@ -8,7 +8,7 @@ def generate_random_adjacency(n, rng=None,low=1, high=10):
     """生成 n×n 随机邻接矩阵（完全图，正权）"""
     if low == 0:
         low = 1e-18  # avoid zero weights
-    mat = rng.uniform(low, high, size=(n, n), dtype=np.float32)
+    mat = rng.uniform(low, high, size=(n, n)).astype(np.float32)
     np.fill_diagonal(mat, 0)
     return mat
 
