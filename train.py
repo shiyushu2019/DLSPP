@@ -38,9 +38,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ---------- 模型定义 ----------
-import torch
-import torch.nn as nn
-
 class MyClassifier(nn.Module):
     def __init__(self, in_dim, out_dim, num_layers):
         super().__init__()
@@ -61,7 +58,7 @@ class MyClassifier(nn.Module):
 
         conv_layers.append(nn.Conv2d(in_ch, 128, kernel_size=3, padding=1))
         conv_layers.append(nn.SiLU())
-        in_ch = 128   #
+        in_ch = 128   
 
         self.conv = nn.Sequential(*conv_layers)
 
