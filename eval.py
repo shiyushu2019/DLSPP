@@ -1,17 +1,21 @@
 import torch
-from train import MyClassifier, INPUT_DIM, OUTPUT_DIM, DEVICE,NUM_LAYERS,LEN,BATCH_SIZE,L,PATH,M
+from train import MyClassifier, INPUT_DIM, OUTPUT_DIM, DEVICE,NUM_LAYERS,L,PATH,M
 import random
 import heapq
 import math
-from typing import Union, List, Sequence
 from tqdm import tqdm
 import numpy as np
+import argparse
 
-Tolerance=1e-6  # 设置一个容忍度，用于浮点数比较
+# 设置容忍度
+parser = argparse.ArgumentParser()
+parser.add_argument("--tolerance", type=float, default=5e-2)
+args = parser.parse_args()
+Tolerance = args.tolerance
+print(f"Using tolerance: {Tolerance}")
 
 """abbanden correspondence of indexes, use global random generator"""
 """mluti-ans is considered"""
-#IT_rng = random.Random(int(1e19))
 IT_rng = np.random.default_rng(int(1e19))
 
 adj_mean = (M - 1) / 2

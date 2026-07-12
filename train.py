@@ -80,7 +80,7 @@ class MyClassifier(nn.Module):
 
         conv_layers.append(nn.Conv2d(in_ch, 128, kernel_size=3, padding=1))
         conv_layers.append(nn.SiLU())
-        in_ch = 128   #
+        in_ch = 128   
 
         self.conv = nn.Sequential(*conv_layers)
 
