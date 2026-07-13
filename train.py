@@ -5,7 +5,9 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+
 from DataGenerator import FakeList, MapRouteDataset
+from model import MyClassifier
 
 PATH="checkpoint/add-residual/model.pth"
 RESUME_FROM=None # pretrain weight or None
@@ -32,88 +34,23 @@ PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
 MININTERVAL=10
-REVERSE_G=0
+REVERSE_G=30
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-# ---------- 模型定义 ----------
-class ResidualBlock(nn.Module):
-    def __init__(self, dim, dropout):
-        super().__init__()
-        # 标准 Pre-Norm 结构：先归一化，再线性变换，再激活
-        self.norm = nn.LayerNorm(dim)
-        self.linear = nn.Linear(dim, dim)
-        self.act = nn.SiLU()
-        self.drop = nn.Dropout(dropout)
-        
-    def forward(self, x):
-        residual = x
-        # 1. 先对输入 x 做 LayerNorm（关键改动）
-        out = self.norm(x)
-        # 2. 再做线性变换
-        out = self.linear(out)
-        # 3. 激活
-        out = self.act(out)
-        # 4. Dropout（如果有）
-        out = self.drop(out)
-        # 5. 残差连接
-        return residual + out
-
-class MyClassifier(nn.Module):
-    def __init__(self, in_dim, out_dim, num_layers):
-        super().__init__()
-        self.num_poolings = NUM_POOLINGS
-
-        conv_layers = []
-        in_ch = 1
-        out_ch = 32
-        for i in range(NUM_POOLINGS):
-            conv_layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1))
-            conv_layers.append(nn.SiLU())
-            in_ch = out_ch
-            out_ch = out_ch * 2
-            conv_layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1))
-            conv_layers.append(nn.SiLU())
-            in_ch = out_ch
-            conv_layers.append(nn.MaxPool2d(2))
-
-        conv_layers.append(nn.Conv2d(in_ch, 128, kernel_size=3, padding=1))
-        conv_layers.append(nn.SiLU())
-        in_ch = 128   
-
-        self.conv = nn.Sequential(*conv_layers)
-
-        out_size = L // (2 ** NUM_POOLINGS)
-        assert out_size > 0, f"池化次数 {NUM_POOLINGS} 过大"
-        self.conv_out_dim = in_ch * out_size * out_size
-        extra_dim = in_dim - L * L                        
-        prev_dim = self.conv_out_dim + extra_dim  
-
-        # 后续 MLP
-        hidden_size = HIDDEN_SIZE
-        mlp_modules = []
-        mlp_modules.append(nn.LayerNorm(prev_dim))         
-        mlp_modules.append(nn.Linear(prev_dim, hidden_size))
-        mlp_modules.append(nn.SiLU())
-        mlp_modules.append(nn.Dropout(p=DROP_OUT))          
-        for _ in range(num_layers - 2):
-            mlp_modules.append(ResidualBlock(hidden_size, DROP_OUT))
-        mlp_modules.append(nn.LayerNorm(hidden_size))
-        mlp_modules.append(nn.Linear(hidden_size, out_dim))
-        self.mlp = nn.Sequential(*mlp_modules)
-
-    def forward(self, x):
-        grid = x[:, :L*L].view(-1, 1, L, L)   # (batch, 1, 50, 50)
-        extra = x[:, L*L:]                       # (batch, 2)
-        conv_feat = self.conv(grid)               # (batch, 128, 12, 12)
-        conv_feat = conv_feat.view(conv_feat.size(0), -1)  # flatten
-        combined = torch.cat([conv_feat, extra], dim=1)    # (batch, conv_out_dim+2)
-        out = self.mlp(combined)
-        return out
+model_args={
+    "L":L,
+    "in_dim":INPUT_DIM,
+    "out_dim":OUTPUT_DIM,
+    "num_layers":NUM_LAYERS,
+    "hidden_size":HIDDEN_SIZE,
+    "num_poolings":NUM_POOLINGS,
+    "dropout":DROP_OUT,
+}
 
 if __name__ == "__main__":
-    reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda() #25G
+    # 抢占富裕显存避免降速
+    reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
     
     seed_bia=1
     fakelist=FakeList(M,L,LEN,seed_bia)
@@ -124,16 +61,13 @@ if __name__ == "__main__":
     val_dataset = MapRouteDataset(M,L,val_fakelist)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
 
-    print(f"loader generated")
-
     val_len = len(val_dataset)
     train_len = len(dataset)
 
     print(f"训练集大小: {train_len}, 验证集大小: {val_len}")
-    print("loader done")
 
     #  初始化模型、损失函数、优化器
-    model = MyClassifier(INPUT_DIM, OUTPUT_DIM, NUM_LAYERS).to(DEVICE)
+    model = MyClassifier(**model_args).to(DEVICE)
     if RESUME_FROM:
         model.load_state_dict(torch.load(RESUME_FROM))
     criterion = nn.CrossEntropyLoss()

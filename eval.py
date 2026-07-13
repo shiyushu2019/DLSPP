@@ -1,11 +1,13 @@
 import torch
-from train import MyClassifier, INPUT_DIM, OUTPUT_DIM, DEVICE,NUM_LAYERS,L,PATH,M
 import random
 import heapq
 import math
 from tqdm import tqdm
 import numpy as np
 import argparse
+
+from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT
+from model import MyClassifier
 
 # 设置容忍度
 parser = argparse.ArgumentParser()
@@ -17,7 +19,9 @@ print(f"Using tolerance: {Tolerance}")
 """abbanden correspondence of indexes, use global random generator"""
 """mluti-ans is considered"""
 IT_rng = np.random.default_rng(int(1e19))
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# 标准化
 adj_mean = (M - 1) / 2
 adj_std = math.sqrt(((M - 1) ** 2) / 12)
 coord_mean = (L - 1) / 2
@@ -30,6 +34,17 @@ std = torch.tensor(
     [adj_std] * (L * L) + [coord_std] * 2,
     dtype=torch.float32
 )
+
+# 模型参数
+model_args={
+    "L":L,
+    "in_dim":INPUT_DIM,
+    "out_dim":OUTPUT_DIM,
+    "num_layers":NUM_LAYERS,
+    "hidden_size":HIDDEN_SIZE,
+    "num_poolings":NUM_POOLINGS,
+    "dropout":DROP_OUT,
+}
 
 def generate_random_adjacency(n, rng=None,low=1, high=10):
     """生成 n×n 随机邻接矩阵（完全图，正权）"""
@@ -74,7 +89,7 @@ def dijkstra(adj, start, end):
 
 if __name__ == "__main__":
     # ---------- 加载模型 ----------
-    model = MyClassifier(INPUT_DIM, OUTPUT_DIM, NUM_LAYERS).to(DEVICE)
+    model = MyClassifier(**model_args).to(DEVICE)
     model.load_state_dict(torch.load(PATH, map_location=DEVICE))
     model.eval()
     print("模型权重加载成功")
