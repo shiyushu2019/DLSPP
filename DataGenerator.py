@@ -83,7 +83,7 @@ class MapRouteDataset:
         self.fakelist = fakelist
         self.L=L
         self.M = M
-
+        """
         adj_mean = (M - 1) / 2
         adj_std = math.sqrt(((M - 1) ** 2) / 12)
         coord_mean = (L - 1) / 2
@@ -96,6 +96,7 @@ class MapRouteDataset:
             [adj_std] * (L * L) + [coord_std] * 2,
             dtype=torch.float32
         )
+        """
         
     def __len__(self):
         return len(self.fakelist)
@@ -112,7 +113,7 @@ class MapRouteDataset:
         #flat = [val for row in adj for val in row] + [start, end]
         flat = adj.flatten().tolist() + [start, end]
         map_tensor = torch.tensor(flat, dtype=torch.float32)
-        map_tensor = (map_tensor - self.mean) / (self.std + 1e-8)
+        #map_tensor = (map_tensor - self.mean) / (self.std + 1e-8)
         
         # route 的第二个元素（第1个中间节点）
         route_tensor = torch.tensor(sample["route"][1], dtype=torch.float32)
