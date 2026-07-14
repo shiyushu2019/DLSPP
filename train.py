@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from DataGenerator import FakeList, MapRouteDataset
 from model import MyClassifier
 
-PATH="checkpoint/add-residual/model.pth"
+PATH="checkpoint/pure-MLP/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(5e8)
 L = 10
@@ -27,24 +27,21 @@ BATCH_SIZE = 512
           
 NUM_LAYERS = 10
 HIDDEN_SIZE=int(4096*3)
-NUM_POOLINGS=1
 
 NUM_WORKERS=48
 PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
 MININTERVAL=10
-REVERSE_G=30
+REVERSE_G=0
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model_args={
-    "L":L,
     "in_dim":INPUT_DIM,
     "out_dim":OUTPUT_DIM,
     "num_layers":NUM_LAYERS,
     "hidden_size":HIDDEN_SIZE,
-    "num_poolings":NUM_POOLINGS,
     "dropout":DROP_OUT,
 }
 

@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 
-from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT
+from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT
 from model import MyClassifier
 
 # 设置容忍度
@@ -37,12 +37,10 @@ std = torch.tensor(
 
 # 模型参数
 model_args={
-    "L":L,
     "in_dim":INPUT_DIM,
     "out_dim":OUTPUT_DIM,
     "num_layers":NUM_LAYERS,
     "hidden_size":HIDDEN_SIZE,
-    "num_poolings":NUM_POOLINGS,
     "dropout":DROP_OUT,
 }
 

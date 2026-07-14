@@ -25,37 +25,9 @@ class ResidualBlock(nn.Module):
         return residual + out
 
 class MyClassifier(nn.Module):
-    def __init__(self, *,in_dim, out_dim, num_layers, hidden_size, num_poolings, dropout,L):
+    def __init__(self, *,in_dim, out_dim, num_layers, hidden_size, dropout):
         super().__init__()
-        self.num_poolings = num_poolings
-        self.L = L
-        conv_layers = []
-        in_ch = 1
-        out_ch = 32
-        for i in range(num_poolings):
-            conv_layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1))
-            conv_layers.append(nn.SiLU())
-            in_ch = out_ch
-            out_ch = out_ch * 2
-            conv_layers.append(nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1))
-            conv_layers.append(nn.SiLU())
-            in_ch = out_ch
-            conv_layers.append(nn.MaxPool2d(2))
-
-        conv_layers.append(nn.Conv2d(in_ch, 128, kernel_size=3, padding=1))
-        conv_layers.append(nn.SiLU())
-        in_ch = 128   
-
-        self.conv = nn.Sequential(*conv_layers)
-
-        out_size = L // (2 ** num_poolings)
-        assert out_size > 0, f"池化次数 {num_poolings} 过大"
-        self.conv_out_dim = in_ch * out_size * out_size
-        extra_dim = in_dim - L * L                        
-        prev_dim = self.conv_out_dim + extra_dim  
-
-        # 后续 MLP
-        hidden_size = hidden_size
+        prev_dim = in_dim
         mlp_modules = []
         mlp_modules.append(nn.LayerNorm(prev_dim))         
         mlp_modules.append(nn.Linear(prev_dim, hidden_size))
@@ -68,12 +40,7 @@ class MyClassifier(nn.Module):
         self.mlp = nn.Sequential(*mlp_modules)
 
     def forward(self, x):
-        grid = x[:, :self.L*self.L].view(-1, 1, self.L, self.L)   # (batch, 1, 50, 50)
-        extra = x[:, self.L*self.L:]                       # (batch, 2)
-        conv_feat = self.conv(grid)               # (batch, 128, 12, 12)
-        conv_feat = conv_feat.view(conv_feat.size(0), -1)  # flatten
-        combined = torch.cat([conv_feat, extra], dim=1)    # (batch, conv_out_dim+2)
-        out = self.mlp(combined)
+        out = self.mlp(x)
         return out
 
 if __name__ == "__main__":
