@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from DataGenerator import FakeList, MapRouteDataset
 from model import MyClassifier
 
-PATH="checkpoint/add-residual/GNN/model.pth"
+PATH="checkpoint/GNN/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(5e8)
 L = 10
@@ -34,7 +34,7 @@ PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
 MININTERVAL=10
-REVERSE_G=0
+REVERSE_G=30
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
