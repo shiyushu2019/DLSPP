@@ -22,13 +22,13 @@ MOMENTUM = 0.9
 SCH_PATIENCE=8   # 验证准确率连续不下降就降低LR
 SCH_FACTOR=0.5   # 降低的比例
 
-LR = 3e-4
+LR = 6e-4
 DROP_OUT=0.0
 WEIGHT_DECAY = 0.0
 BATCH_SIZE = 512
           
-NUM_LAYERS = 6
-HIDDEN_SIZE=int(4096*3)
+NUM_LAYERS = 10
+HIDDEN_SIZE=int(4096*2)
 NUM_GNN_LAYERS=2
 
 NUM_WORKERS=48
@@ -36,7 +36,7 @@ PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
 MININTERVAL=60
-REVERSE_G=30
+REVERSE_G=0
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
