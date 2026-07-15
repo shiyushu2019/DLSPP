@@ -28,8 +28,12 @@ class GCNLayer(nn.Module):
         self.linear = nn.Linear(in_dim, out_dim)
         self.act = nn.SiLU()
         self.drop = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        self.use_residual = use_residual and (in_dim == out_dim)
-        # 可优化：用投影层打通不同维度
+        self.use_residual = use_residual
+        # 加一个投影层，维度不匹配就投影，匹配就恒等
+        if use_residual:
+            self.proj = nn.Linear(in_dim, out_dim) if in_dim != out_dim else nn.Identity()
+        else:
+            self.proj = None
         
     def forward(self, x, norm_A):
         agg = torch.bmm(norm_A, x)           
@@ -38,7 +42,7 @@ class GCNLayer(nn.Module):
         out = self.act(out)
         out = self.drop(out)
         if self.use_residual:
-            out = out + x
+            out = out + self.proj(x)
         return out
 
 class MyClassifier(nn.Module):
@@ -112,7 +116,7 @@ class MyClassifier(nn.Module):
             x_gnn[:, :L*L] = x_gnn[:, :L*L] + x[:, :L*L]   
             x_gnn[:, L*L:] = x[:, L*L:]    
             """  
-            x_gnn = x_gnn + x              
+            #x_gnn = x_gnn + x              
             out = self.mlp(x_gnn)
         else:
             out = self.mlp(x)
