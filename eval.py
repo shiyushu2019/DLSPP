@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 
-from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT
+from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT,DO_STD
 from model import MyClassifier
 
 # 设置容忍度
@@ -22,18 +22,19 @@ IT_rng = np.random.default_rng(int(1e19))
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 标准化
-adj_mean = (M - 1) / 2
-adj_std = math.sqrt(((M - 1) ** 2) / 12)
-coord_mean = (L - 1) / 2
-coord_std = math.sqrt((L ** 2 - 1) / 12)
-mean = torch.tensor(
-    [adj_mean] * (L * L) + [coord_mean] * 2,
-    dtype=torch.float32
-)
-std = torch.tensor(
-    [adj_std] * (L * L) + [coord_std] * 2,
-    dtype=torch.float32
-)
+if DO_STD:
+    adj_mean = (M - 1) / 2
+    adj_std = math.sqrt(((M - 1) ** 2) / 12)
+    coord_mean = (L - 1) / 2
+    coord_std = math.sqrt((L ** 2 - 1) / 12)
+    mean = torch.tensor(
+        [adj_mean] * (L * L) + [coord_mean] * 2,
+        dtype=torch.float32
+    )
+    std = torch.tensor(
+        [adj_std] * (L * L) + [coord_std] * 2,
+        dtype=torch.float32
+    )
 
 # 模型参数
 model_args={
@@ -117,7 +118,8 @@ if __name__ == "__main__":
             #flat = [val for row in adj for val in row] + [start, end]
             flat = adj.flatten().tolist() + [start, end]
             map_tensor = torch.tensor(flat, dtype=torch.float32)
-            map_tensor = (map_tensor - mean) / (std + 1e-8)
+            if DO_STD:
+                map_tensor = (map_tensor - mean) / (std + 1e-8)
             batch=map_tensor.unsqueeze(0)
             ans = path[1]
             batch=batch.to(DEVICE)
