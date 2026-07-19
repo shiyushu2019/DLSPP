@@ -62,6 +62,7 @@ cnn_config={
     "final_conv_channels":128,
     "in_channels":1,
     "num_poolings":1,
+    "do_norm":True
 }
 gnn_config={
     "num_gnn_layers":1,
