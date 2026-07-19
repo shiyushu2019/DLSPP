@@ -9,7 +9,9 @@ from torch.utils.data import DataLoader
 from DataGenerator import FakeList, MapRouteDataset
 from model import MyClassifier
 
-PATH="checkpoint/add-residual/model.pth"
+DEBUG = False
+
+PATH="checkpoint/CNN/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(5e8)
 L = 10
@@ -18,7 +20,9 @@ INPUT_DIM = L * L + 2
 OUTPUT_DIM = L     
 EPOCHS = 1000
 PATIENCE=3000000      
-MOMENTUM = 0.9 
+MOMENTUM = 0.9
+SCH_PATIENCE=8   # 验证准确率连续不下降就降低LR
+SCH_FACTOR=0.5   # 降低的比例
 
 LR = 1e-3
 DROP_OUT=0.0
@@ -33,7 +37,7 @@ NUM_WORKERS=48
 PREFETCH_FACTOR=2
 
 VAL_STEP=int(3000)
-MININTERVAL=10
+MININTERVAL=60
 REVERSE_G=30
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -51,6 +55,8 @@ model_args={
 if __name__ == "__main__":
     # 抢占富裕显存避免降速
     reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
+    if DEBUG:
+        MININTERVAL=1
     
     seed_bia=1
     fakelist=FakeList(M,L,LEN,seed_bia)
@@ -72,7 +78,9 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(RESUME_FROM))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=LR, momentum=MOMENTUM, weight_decay=WEIGHT_DECAY )
-    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+
+    # -----------自动降LR---------------
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=SCH_FACTOR, patience=SCH_PATIENCE)
 
     # 训练循环
     patience = PATIENCE
@@ -102,6 +110,9 @@ if __name__ == "__main__":
             batch_cnt+=1
             avg_loss = cur_loss / batch_cnt
 
+            if DEBUG:
+                loop.set_postfix(loss=avg_loss)
+
             if batch_cnt == VAL_STEP:
                 batch_cnt=0
                 cur_loss=0.0
@@ -127,7 +138,15 @@ if __name__ == "__main__":
 
                 print(f"Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.4f}")
 
-                #scheduler.step(val_acc) 
+
+                # -----------自动降LR---------------
+                old_lr = optimizer.param_groups[0]['lr']
+                scheduler.step(val_acc) 
+                new_lr = optimizer.param_groups[0]['lr']
+                if new_lr != old_lr:
+                    print(f"学习率已调整：{old_lr:.6f} -> {new_lr:.6f}")
+
+
                 # ---------- 保存最佳模型 ----------
                 if val_acc > best_val_acc:
                     trigger_times = 0   # 重置
