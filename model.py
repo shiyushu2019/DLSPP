@@ -52,7 +52,10 @@ class MyClassifier(nn.Module):
         extra_dim = in_dim - L * L                        
         prev_dim = self.conv_out_dim + extra_dim  
 
-        # 后续 MLP
+        # --------------MLP---------------
+        prev_dim += L*L+2 
+        self.coeff = nn.Parameter(torch.tensor(1.0))
+        # 改动：MLP的输入既包括CNN的输出也包括初始数据
         hidden_size = hidden_size
         mlp_modules = []
         mlp_modules.append(nn.LayerNorm(prev_dim))         
@@ -70,7 +73,7 @@ class MyClassifier(nn.Module):
         extra = x[:, self.L*self.L:]                       # (batch, 2)
         conv_feat = self.conv(grid)               # (batch, 128, 12, 12)
         conv_feat = conv_feat.view(conv_feat.size(0), -1)  # flatten
-        combined = torch.cat([conv_feat, extra], dim=1)    # (batch, conv_out_dim+2)
+        combined = torch.cat([conv_feat, extra, self.coeff*x], dim=1) 
         out = self.mlp(combined)
         return out
 
