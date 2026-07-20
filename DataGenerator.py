@@ -83,6 +83,7 @@ class MapRouteDataset:
         self.fakelist = fakelist
         self.L=L
         self.M = M
+        self.do_std=do_std
 
         if do_std:
             adj_mean = (M - 1) / 2
@@ -113,7 +114,7 @@ class MapRouteDataset:
         #flat = [val for row in adj for val in row] + [start, end]
         flat = adj.flatten().tolist() + [start, end]
         map_tensor = torch.tensor(flat, dtype=torch.float32)
-        if do_std:
+        if self.do_std:
             map_tensor = (map_tensor - self.mean) / (self.std + 1e-8)
         
         # route 的第二个元素（第1个中间节点）
