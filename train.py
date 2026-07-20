@@ -11,7 +11,10 @@ from DataGenerator import FakeList, MapRouteDataset
 from model import MyClassifier
 
 #----------调试------------
-DEBUG = False
+DEBUG = True
+USE_CNN = False
+USE_GNN = True
+USE_DIRECT = False
 PATH="checkpoint/CG/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(1e9)
@@ -36,14 +39,14 @@ M = 10
 INPUT_DIM = L * L + 2 
 OUTPUT_DIM = L     
 NUM_LAYERS = 10
-HIDDEN_SIZE=int(4096)
+HIDDEN_SIZE=int(4096*2)
 
 #---------硬参数------------
 NUM_WORKERS=48
 PREFETCH_FACTOR=2
 VAL_STEP=int(3000)
 MININTERVAL=60
-REVERSE_G=30
+REVERSE_G=0
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model_args={
@@ -54,8 +57,9 @@ model_args={
     "hidden_size":HIDDEN_SIZE,
     "dropout":DROP_OUT,
     "extra_dim":2,
-    "use_cnn":True,
-    "use_gnn":True,
+    "use_cnn":USE_CNN,
+    "use_gnn":USE_GNN,
+    "use_direct":USE_DIRECT
 }
 cnn_config={
     "init_channels":32,         
@@ -67,7 +71,7 @@ cnn_config={
 gnn_config={
     "num_gnn_layers":1,
     "gnn_hidden_size":512,
-    "gnn_out_dim":None
+    "gnn_out_dim":L*L
 }
 
 if __name__ == "__main__":

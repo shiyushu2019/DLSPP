@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class ResidualBlock(nn.Module):
     def __init__(self, dim, dropout):
@@ -58,21 +59,29 @@ class CnnBlock(nn.Module):
         out=conv_feat
         return out
         
-class GCNLayer(nn.Module):
+class AttentionLayer(nn.Module):
     def __init__(self, in_dim, out_dim, *, use_residual=True, dropout):
         super().__init__()
-        self.norm = nn.LayerNorm(in_dim)         
-        self.linear = nn.Linear(in_dim, out_dim)
+        self.norm = nn.LayerNorm(in_dim)
+        self.q_proj = nn.Linear(in_dim, in_dim, bias=False)
+        self.k_proj = nn.Linear(in_dim, in_dim, bias=False)
+        self.linear = nn.Linear(in_dim, out_dim)   # 对聚合后的特征做变换
         self.act = nn.SiLU()
         self.drop = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.use_residual = use_residual and (in_dim == out_dim)
-        
-    def forward(self, x, norm_A):
-        agg = torch.bmm(norm_A, x)           
-        out = self.norm(agg)                     
-        out = self.linear(out)                   
+        self.scale = in_dim ** -0.5
+
+    def forward(self, x, mask=None):
+        Q = self.q_proj(x)  
+        K = self.k_proj(x) 
+        attn = torch.bmm(Q, K.transpose(1, 2)) * self.scale
+        attn = F.softmax(attn, dim=-1) 
+        agg = torch.bmm(attn, x) 
+        out = self.norm(agg)
+        out = self.linear(out)
         out = self.act(out)
         out = self.drop(out)
+        
         if self.use_residual:
             out = out + x
         return out
@@ -85,12 +94,12 @@ class GnnBlock(nn.Module):
         self.register_buffer('eye', torch.eye(L))
         self.L=L
         self.out_dim=out_dim
-        gnn_in = self.L
+        gnn_in = 2 * self.L
         gnn_out = hidden_size
         self.gnn_layers = nn.ModuleList()
         for i in range(self.num_gnn_layers):
             layer_in = gnn_in if i == 0 else gnn_out
-            self.gnn_layers.append(GCNLayer(layer_in, gnn_out, use_residual=True, dropout=dropout))
+            self.gnn_layers.append(AttentionLayer(layer_in, gnn_out, use_residual=True, dropout=dropout))
         self.gnn_to_mlp = nn.Sequential(
             nn.Linear(2 * gnn_out, out_dim),
             nn.SiLU(),                         
@@ -106,14 +115,13 @@ class GnnBlock(nn.Module):
         end_idx   = x[:, L*L+1].long()
         start_idx = torch.clamp(start_idx, 0, L-1)
         end_idx   = torch.clamp(end_idx, 0, L-1)
-        h = adj 
-        A_hat = adj + self.eye.unsqueeze(0)    
-        D_hat = A_hat.sum(dim=-1, keepdim=True) 
-        eps = 1e-12
-        D_inv = 1.0 / (D_hat + eps)      
-        norm_A = D_inv * A_hat                 
+        h = torch.cat([
+            self.eye.unsqueeze(0).expand(batch_size, -1, -1),
+            adj
+        ], dim=-1)
+        eps = 1e-12     
         for layer in self.gnn_layers:
-            h = layer(h, norm_A)  
+            h = layer(h) 
         idx = torch.arange(batch_size, device=x.device)
         start_feat = h[idx, start_idx, :]  
         end_feat   = h[idx, end_idx, :]   
@@ -124,8 +132,9 @@ class GnnBlock(nn.Module):
 class MyClassifier(nn.Module):
     def __init__(self, *,in_dim, out_dim, num_layers, hidden_size,  dropout,L,
                 extra_dim=2,
-                use_cnn=True,
-                use_gnn=True,
+                use_cnn,
+                use_gnn,
+                use_direct,
                 # --------CNN---------
                 init_channels=32,          # 初始卷积核数
                 final_conv_channels=128,   # 最后卷积输出通道数
@@ -137,6 +146,7 @@ class MyClassifier(nn.Module):
                 gnn_hidden_size=512,
                 gnn_out_dim=None
                 ):
+        # 所有没有默认值的命名参数已确认正确传递
         super().__init__()
         if gnn_out_dim==None:
             gnn_out_dim=L*L
@@ -144,6 +154,8 @@ class MyClassifier(nn.Module):
         self.L = L
         self.use_gnn=use_gnn
         self.use_cnn=use_cnn
+        self.use_direct=use_direct
+        assert use_cnn or use_gnn or use_direct , "At least one channl is used"
         assert self.L**2+self.extra_dim==in_dim , "Error in parameter calculation on the training end"
         if use_cnn:
             self.Cnn=CnnBlock(num_poolings=num_poolings, 
@@ -157,13 +169,18 @@ class MyClassifier(nn.Module):
                         num_gnn_layers=num_gnn_layers)
         
         # --------------MLP---------------
-        prev_dim = in_dim
+        prev_dim = 0
+        if use_direct:
+            prev_dim += in_dim
         if use_cnn:
             prev_dim += self.Cnn.conv_out_dim
         if use_gnn:
             prev_dim += self.Gnn.out_dim
+        if not use_direct:
+            prev_dim += extra_dim # 没有MLP直连通道，就要额外加上起点和终点
         self.coeff_cnn = nn.Parameter(torch.tensor(1.0))
         self.coeff_gnn = nn.Parameter(torch.tensor(1.0))
+        self.coeff_direct = nn.Parameter(torch.tensor(1.0))
         # MLP的输入既包括CNN、GNN的输出也包括初始数据
         mlp_modules = []
         mlp_modules.append(nn.LayerNorm(prev_dim))         
@@ -177,11 +194,15 @@ class MyClassifier(nn.Module):
         self.mlp = nn.Sequential(*mlp_modules)
 
     def forward(self, x):
-        outputs = [x]
+        outputs = []
+        if self.use_direct:
+            outputs.append(x*self.coeff_direct)
         if self.use_cnn:
             outputs.append(self.coeff_cnn * self.Cnn(x))
         if self.use_gnn:
             outputs.append(self.coeff_gnn * self.Gnn(x))
+        if not self.use_direct:
+            outputs.append(x[:, self.L*self.L:]) # 没有MLP直连通道，就要额外加上起点和终点
         combined = torch.cat(outputs, dim=1) 
         out = self.mlp(combined)
         return out
