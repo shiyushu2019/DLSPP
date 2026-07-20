@@ -12,9 +12,9 @@ from model import MyClassifier
 
 #----------调试------------
 DEBUG = True
-USE_CNN = False
-USE_GNN = True
-USE_DIRECT = False
+USE_CNN = True
+USE_TRANSFORMER = True
+USE_DIRECT = True
 PATH="checkpoint/CG/model.pth"
 RESUME_FROM=None # pretrain weight or None
 LEN=int(1e9)
@@ -58,7 +58,7 @@ model_args={
     "dropout":DROP_OUT,
     "extra_dim":2,
     "use_cnn":USE_CNN,
-    "use_gnn":USE_GNN,
+    "use_transformer":USE_TRANSFORMER,
     "use_direct":USE_DIRECT
 }
 cnn_config={
@@ -68,10 +68,10 @@ cnn_config={
     "num_poolings":1,
     "do_norm":True
 }
-gnn_config={
-    "num_gnn_layers":3,
-    "gnn_hidden_size":512,
-    "gnn_out_dim":2048
+transformer_config={
+    "num_transformer_layers":3,
+    "transformer_hidden_size":512,
+    "transformer_out_dim":2048
 }
 
 if __name__ == "__main__":
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     print(f"训练集大小: {train_len}, 验证集大小: {val_len}")
 
     #  初始化模型、损失函数、优化器
-    model = MyClassifier(**model_args, **cnn_config, **gnn_config).to(DEVICE)
+    model = MyClassifier(**model_args, **cnn_config, **transformer_config).to(DEVICE)
     if RESUME_FROM:
         model.load_state_dict(torch.load(RESUME_FROM))
     criterion = nn.CrossEntropyLoss()

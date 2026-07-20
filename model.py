@@ -85,22 +85,22 @@ class AttentionLayer(nn.Module):
             out = out + x
         return out
 
-class GnnBlock(nn.Module):
-    def __init__(self  ,*,out_dim, L,hidden_size, use_residual=True, dropout, num_gnn_layers):
+class TransformerBlock(nn.Module):
+    def __init__(self  ,*,out_dim, L,hidden_size, use_residual=True, dropout, num_transformer_layers):
         super().__init__()
-        assert num_gnn_layers>0
-        self.num_gnn_layers=num_gnn_layers
+        assert num_transformer_layers>0
+        self.num_transformer_layers=num_transformer_layers
         self.register_buffer('eye', torch.eye(L))
         self.L=L
         self.out_dim=out_dim
-        gnn_in = 4* self.L
-        gnn_out = hidden_size
-        self.gnn_layers = nn.ModuleList()
-        for i in range(self.num_gnn_layers):
-            layer_in = gnn_in if i == 0 else gnn_out
-            self.gnn_layers.append(AttentionLayer(layer_in, gnn_out, use_residual=True, dropout=dropout))
-        self.gnn_to_mlp = nn.Sequential(
-            nn.Linear(2 * gnn_out, out_dim),
+        transformer_in = 4* self.L
+        transformer_out = hidden_size
+        self.transformer_layers = nn.ModuleList()
+        for i in range(self.num_transformer_layers):
+            layer_in = transformer_in if i == 0 else transformer_out
+            self.transformer_layers.append(AttentionLayer(layer_in, transformer_out, use_residual=True, dropout=dropout))
+        self.transformer_to_mlp = nn.Sequential(
+            nn.Linear(2 * transformer_out, out_dim),
             nn.SiLU(),                         
             nn.Dropout(dropout),              
             nn.LayerNorm(out_dim)
@@ -121,20 +121,20 @@ class GnnBlock(nn.Module):
         # 拼接进节点特征
         h = torch.cat([self.eye.unsqueeze(0).expand(batch_size, -1, -1), adj, start_expand, end_expand], dim=-1)
         eps = 1e-12     
-        for layer in self.gnn_layers:
+        for layer in self.transformer_layers:
             h = layer(h) 
         idx = torch.arange(batch_size, device=x.device)
         start_feat = h[idx, start_idx, :]  
         end_feat   = h[idx, end_idx, :]   
         combined = torch.cat([start_feat, end_feat], dim=-1)        
-        out = self.gnn_to_mlp(combined)                 
+        out = self.transformer_to_mlp(combined)                 
         return out
 
 class MyClassifier(nn.Module):
     def __init__(self, *,in_dim, out_dim, num_layers, hidden_size,  dropout,L,
                 extra_dim=2,
                 use_cnn,
-                use_gnn,
+                use_transformer,
                 use_direct,
                 # --------CNN---------
                 init_channels=32,          # 初始卷积核数
@@ -142,21 +142,21 @@ class MyClassifier(nn.Module):
                 in_channels=1,
                 num_poolings=1,
                 do_norm,
-                # -------GNN--------
-                num_gnn_layers=1,
-                gnn_hidden_size=512,
-                gnn_out_dim=None
+                # -------transformer--------
+                num_transformer_layers=1,
+                transformer_hidden_size=512,
+                transformer_out_dim=None
                 ):
         # 所有没有默认值的命名参数已确认正确传递
         super().__init__()
-        if gnn_out_dim==None:
-            gnn_out_dim=L*L
+        if transformer_out_dim==None:
+            transformer_out_dim=L*L
         self.extra_dim=extra_dim
         self.L = L
-        self.use_gnn=use_gnn
+        self.use_transformer=use_transformer
         self.use_cnn=use_cnn
         self.use_direct=use_direct
-        assert use_cnn or use_gnn or use_direct , "At least one channl is used"
+        assert use_cnn or use_transformer or use_direct , "At least one channl is used"
         assert self.L**2+self.extra_dim==in_dim , "Error in parameter calculation on the training end"
         if use_cnn:
             self.Cnn=CnnBlock(num_poolings=num_poolings, 
@@ -165,9 +165,9 @@ class MyClassifier(nn.Module):
                     in_channels=in_channels,
                     init_channels=init_channels,
                     do_norm=do_norm)
-        if use_gnn:
-            self.Gnn=GnnBlock(L=self.L,hidden_size=gnn_hidden_size,dropout=dropout,out_dim=gnn_out_dim,
-                        num_gnn_layers=num_gnn_layers)
+        if use_transformer:
+            self.transformer=TransformerBlock(L=self.L,hidden_size=transformer_hidden_size,dropout=dropout,out_dim=transformer_out_dim,
+                        num_transformer_layers=num_transformer_layers)
         
         # --------------MLP---------------
         prev_dim = 0
@@ -175,14 +175,14 @@ class MyClassifier(nn.Module):
             prev_dim += in_dim
         if use_cnn:
             prev_dim += self.Cnn.conv_out_dim
-        if use_gnn:
-            prev_dim += self.Gnn.out_dim
+        if use_transformer:
+            prev_dim += self.transformer.out_dim
         if not use_direct:
             prev_dim += extra_dim # 没有MLP直连通道，就要额外加上起点和终点
         self.coeff_cnn = nn.Parameter(torch.tensor(1.0))
-        self.coeff_gnn = nn.Parameter(torch.tensor(1.0))
+        self.coeff_transformer = nn.Parameter(torch.tensor(1.0))
         self.coeff_direct = nn.Parameter(torch.tensor(1.0))
-        # MLP的输入既包括CNN、GNN的输出也包括初始数据
+        # MLP的输入既包括CNN、transformer的输出也包括初始数据
         mlp_modules = []
         mlp_modules.append(nn.LayerNorm(prev_dim))         
         mlp_modules.append(nn.Linear(prev_dim, hidden_size))
@@ -200,8 +200,8 @@ class MyClassifier(nn.Module):
             outputs.append(x*self.coeff_direct)
         if self.use_cnn:
             outputs.append(self.coeff_cnn * self.Cnn(x))
-        if self.use_gnn:
-            outputs.append(self.coeff_gnn * self.Gnn(x))
+        if self.use_transformer:
+            outputs.append(self.coeff_transformer * self.transformer(x))
         if not self.use_direct:
             outputs.append(x[:, self.L*self.L:]) # 没有MLP直连通道，就要额外加上起点和终点
         combined = torch.cat(outputs, dim=1) 
@@ -209,8 +209,8 @@ class MyClassifier(nn.Module):
         return out
 
 if __name__ == "__main__":
-    from train import model_args, cnn_config, gnn_config
-    model = MyClassifier(**model_args, **cnn_config, **gnn_config).to("cpu")
+    from train import model_args, cnn_config, transformer_config
+    model = MyClassifier(**model_args, **cnn_config, **transformer_config).to("cpu")
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"总参数量: {total_params:,}")
