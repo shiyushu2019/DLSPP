@@ -131,6 +131,7 @@ class MyClassifier(nn.Module):
                 final_conv_channels=128,   # 最后卷积输出通道数
                 in_channels=1,
                 num_poolings=1,
+                do_norm,
                 # -------GNN--------
                 num_gnn_layers=1,
                 gnn_hidden_size=512,
@@ -149,7 +150,8 @@ class MyClassifier(nn.Module):
                     L=L,
                     final_conv_channels=final_conv_channels,
                     in_channels=in_channels,
-                    init_channels=init_channels)
+                    init_channels=init_channels,
+                    do_norm=do_norm)
         if use_gnn:
             self.Gnn=GnnBlock(L=self.L,hidden_size=gnn_hidden_size,dropout=dropout,out_dim=gnn_out_dim,
                         num_gnn_layers=num_gnn_layers)
