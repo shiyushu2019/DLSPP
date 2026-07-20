@@ -8,7 +8,7 @@ import argparse
 from train import (model_args,
                    cnn_config,
                    gnn_config,
-                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT,DO_STD)
+                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD)
 from model import MyClassifier
 
 # 设置容忍度
