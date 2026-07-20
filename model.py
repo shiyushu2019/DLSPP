@@ -185,8 +185,8 @@ class MyClassifier(nn.Module):
         return out
 
 if __name__ == "__main__":
-    from train import model_args
-    model = MyClassifier(**model_args).to("cpu")
+    from train import model_args, cnn_config, gnn_config
+    model = MyClassifier(**model_args, **cnn_config, **gnn_config).to("cpu")
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"总参数量: {total_params:,}")

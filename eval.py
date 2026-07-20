@@ -5,8 +5,10 @@ import math
 from tqdm import tqdm
 import numpy as np
 import argparse
-
-from train import INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT,DO_STD
+from train import (model_args,
+                   cnn_config,
+                   gnn_config,
+                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,NUM_POOLINGS,DROP_OUT,DO_STD)
 from model import MyClassifier
 
 # 设置容忍度
@@ -36,16 +38,6 @@ if DO_STD:
         dtype=torch.float32
     )
 
-# 模型参数
-model_args={
-    "L":L,
-    "in_dim":INPUT_DIM,
-    "out_dim":OUTPUT_DIM,
-    "num_layers":NUM_LAYERS,
-    "hidden_size":HIDDEN_SIZE,
-    "num_poolings":NUM_POOLINGS,
-    "dropout":DROP_OUT,
-}
 
 def generate_random_adjacency(n, rng=None,low=1, high=10):
     """生成 n×n 随机邻接矩阵（完全图，正权）"""
@@ -90,7 +82,7 @@ def dijkstra(adj, start, end):
 
 if __name__ == "__main__":
     # ---------- 加载模型 ----------
-    model = MyClassifier(**model_args).to(DEVICE)
+    model = MyClassifier(**model_args, **cnn_config, **gnn_config).to(DEVICE)
     model.load_state_dict(torch.load(PATH, map_location=DEVICE))
     model.eval()
     print("模型权重加载成功")
