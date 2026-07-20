@@ -8,6 +8,7 @@ import argparse
 from train import (model_args,
                    cnn_config,
                    transformer_config,
+                   gnn_config,
                    INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD)
 from model import MyClassifier
 
@@ -82,7 +83,7 @@ def dijkstra(adj, start, end):
 
 if __name__ == "__main__":
     # ---------- 加载模型 ----------
-    model = MyClassifier(**model_args, **cnn_config, **transformer_config).to(DEVICE)
+    model = MyClassifier(**model_args, **cnn_config, **transformer_config,**gnn_config).to(DEVICE)
     model.load_state_dict(torch.load(PATH, map_location=DEVICE))
     model.eval()
     print("模型权重加载成功")
