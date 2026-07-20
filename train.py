@@ -69,9 +69,9 @@ cnn_config={
     "do_norm":True
 }
 gnn_config={
-    "num_gnn_layers":1,
+    "num_gnn_layers":3,
     "gnn_hidden_size":512,
-    "gnn_out_dim":L*L
+    "gnn_out_dim":2048
 }
 
 if __name__ == "__main__":

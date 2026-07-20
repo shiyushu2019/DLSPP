@@ -81,7 +81,6 @@ class AttentionLayer(nn.Module):
         out = self.linear(out)
         out = self.act(out)
         out = self.drop(out)
-        
         if self.use_residual:
             out = out + x
         return out
@@ -94,7 +93,7 @@ class GnnBlock(nn.Module):
         self.register_buffer('eye', torch.eye(L))
         self.L=L
         self.out_dim=out_dim
-        gnn_in = 2 * self.L
+        gnn_in = 4* self.L
         gnn_out = hidden_size
         self.gnn_layers = nn.ModuleList()
         for i in range(self.num_gnn_layers):
@@ -115,10 +114,12 @@ class GnnBlock(nn.Module):
         end_idx   = x[:, L*L+1].long()
         start_idx = torch.clamp(start_idx, 0, L-1)
         end_idx   = torch.clamp(end_idx, 0, L-1)
-        h = torch.cat([
-            self.eye.unsqueeze(0).expand(batch_size, -1, -1),
-            adj
-        ], dim=-1)
+        start_onehot = F.one_hot(start_idx, num_classes=L).float().unsqueeze(1)  
+        end_onehot   = F.one_hot(end_idx,   num_classes=L).float().unsqueeze(1) 
+        start_expand = start_onehot.expand(-1, L, -1)   
+        end_expand   = end_onehot.expand(-1, L, -1)    
+        # 拼接进节点特征
+        h = torch.cat([self.eye.unsqueeze(0).expand(batch_size, -1, -1), adj, start_expand, end_expand], dim=-1)
         eps = 1e-12     
         for layer in self.gnn_layers:
             h = layer(h) 
