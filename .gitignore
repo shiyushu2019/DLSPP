@@ -1,5 +1,7 @@
 runner/
 train_log.txt
+.venv/
+pretrain/
 
 nohup.out
 # Python

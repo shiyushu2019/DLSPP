@@ -11,13 +11,13 @@ from DataGenerator import FakeList, MapRouteDataset
 from model import MyClassifier
 
 #----------调试------------
-DEBUG = True
+DEBUG = False
 USE_CNN = True
 USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
 PATH="checkpoint/CG/model.pth"
-RESUME_FROM=None # pretrain weight or None
+RESUME_FROM="checkpoint/CG/model.pth" # pretrain weight or None
 LEN=int(1e9)
 
 #---------数据参数------------
