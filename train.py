@@ -146,6 +146,7 @@ if __name__ == "__main__":
         avg_val_loss = val_loss / len(val_loader)
         val_acc = correct / total
         best_val_acc=val_acc
+        scheduler.step(val_acc) 
         print(f"resumed from checkpint. best_val_acc: {best_val_acc}")
 
     flag=False
