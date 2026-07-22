@@ -96,14 +96,14 @@ if __name__ == "__main__":
     LR=args.lr
     MIN_JUMP=args.min_jump
     
-    seed_bia=1
+    seed_bia=9
     fakelist=FakeList(M,L,LEN//2,seed_bia) # min_jump 使用默认值
     dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
     
     #--------为高jump设置单独训练数据集，用于按照50%参杂进入每个batch。程序确保batchsize和LEN是偶数----------
     assert LEN%2==0 and BATCH_SIZE%2==0, "jump-divide need even LEN and batchsize"
-    seed_bia=4 # 1: 原来训练集 2：测试集 3：旧eval集
+    seed_bia=4 # 9: 原来训练集 2：测试集 3：旧eval集
     high_jump_fakelist=FakeList(M,L,LEN//2,seed_bia,min_jump=MIN_JUMP)
     high_jump_dataset = MapRouteDataset(M,L,high_jump_fakelist,do_std=DO_STD)
     high_jump_loader = DataLoader(high_jump_dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
