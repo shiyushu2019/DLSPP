@@ -22,6 +22,7 @@ LEN=int(1e9)
 
 #---------数据参数------------
 DO_STD=False
+MIN_JUMP=1
 
 #---------训练参数------------
 LR = 1e-3
@@ -86,16 +87,21 @@ if __name__ == "__main__":
     reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
     if DEBUG:
         MININTERVAL=1
-    #---------parser只在从现有权重开始训练时起作用----------
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
+    parser.add_argument('--lr', type=float, default=LR)
+    parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
+    args = parser.parse_args()
+    LR=args.lr
+    MIN_JUMP=args.min_jump
     
     seed_bia=1
-    fakelist=FakeList(M,L,LEN,seed_bia)
+    fakelist=FakeList(M,L,LEN,seed_bia,min_jump=MIN_JUMP)
     dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
     seed_bia=2
-    val_fakelist=FakeList(M,L,10000,seed_bia)
+    val_fakelist=FakeList(M,L,10000,seed_bia,min_jump=MIN_JUMP)
     val_dataset = MapRouteDataset(M,L,val_fakelist,do_std=DO_STD)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
 
@@ -120,7 +126,6 @@ if __name__ == "__main__":
     best_val_acc = 0.0
 
     if RESUME_FROM:
-        args = parser.parse_args()
         begin=args.begin
         print(f"从第 {begin} 条数据接续训练")
         from torch.utils.data import Subset
