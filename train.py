@@ -16,7 +16,7 @@ USE_CNN = True
 USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
-PATH="checkpoint/CG/model.pth"
+PATH="checkpoint/CG/model-jump4.pth"
 RESUME_FROM="checkpoint/CG/model.pth" # pretrain weight or None
 LEN=int(1e9)
 
@@ -44,7 +44,7 @@ NUM_LAYERS = 10
 HIDDEN_SIZE=int(4096*2)
 
 #---------硬参数------------
-NUM_WORKERS=48
+NUM_WORKERS=24
 PREFETCH_FACTOR=2
 VAL_STEP=int(3000)
 MININTERVAL=60
@@ -97,11 +97,20 @@ if __name__ == "__main__":
     MIN_JUMP=args.min_jump
     
     seed_bia=1
-    fakelist=FakeList(M,L,LEN,seed_bia,min_jump=MIN_JUMP)
+    fakelist=FakeList(M,L,LEN//2,seed_bia) # min_jump 使用默认值
     dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+    
+    #--------为高jump设置单独训练数据集，用于按照50%参杂进入每个batch。程序确保batchsize和LEN是偶数----------
+    assert LEN%2==0 and BATCH_SIZE%2==0, "jump-divide need even LEN and batchsize"
+    seed_bia=4 # 1: 原来训练集 2：测试集 3：旧eval集
+    high_jump_fakelist=FakeList(M,L,LEN//2,seed_bia,min_jump=MIN_JUMP)
+    high_jump_dataset = MapRouteDataset(M,L,high_jump_fakelist,do_std=DO_STD)
+    high_jump_loader = DataLoader(high_jump_dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+
+
     seed_bia=2
-    val_fakelist=FakeList(M,L,10000,seed_bia,min_jump=MIN_JUMP)
+    val_fakelist=FakeList(M,L,10000,seed_bia)
     val_dataset = MapRouteDataset(M,L,val_fakelist,do_std=DO_STD)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
 
@@ -127,10 +136,15 @@ if __name__ == "__main__":
 
     if RESUME_FROM:
         begin=args.begin
+        assert begin%2==0, "begin must be even"
         print(f"从第 {begin} 条数据接续训练")
         from torch.utils.data import Subset
-        subset = Subset(dataset, range(begin, train_len))  # 不加载数据
-        loader = DataLoader(subset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)  # 依然懒加载
+        pair_num=begin//2
+        subset = Subset(dataset, range(pair_num, train_len))  # 不加载数据
+        loader = DataLoader(subset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)  # 依然懒加载
+        high_jump_subset = Subset(high_jump_dataset, range(pair_num, train_len))  # 不加载数据
+        high_jump_loader = DataLoader(high_jump_subset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)  # 依然懒加载
+
         #--------eval---------
         model.eval()
         val_loss = 0.0
@@ -159,14 +173,17 @@ if __name__ == "__main__":
         if flag :
             break
         model.train()
-        loop = tqdm(loader, desc=f'Epoch {epoch+1}/{EPOCHS}',mininterval=MININTERVAL)
+
+        # ---------在训练时，把高jump数据参杂进来-------------
+        loop = tqdm(zip(loader,high_jump_loader), desc=f'Epoch {epoch+1}/{EPOCHS}',mininterval=MININTERVAL)
 
         batch_cnt=0
         cur_loss = 0.0
         
-        for batch_x, batch_y in loop:
+        for (batch_x, batch_y),(high_jump_batch_x, high_jump_batch_y) in loop:
             model.train()
-            
+            batch_x = torch.cat([batch_x, high_jump_batch_x], dim=0)
+            batch_y = torch.cat([batch_y, high_jump_batch_y], dim=0)
             batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
             logits = model(batch_x)
             loss = criterion(logits, batch_y.long())
