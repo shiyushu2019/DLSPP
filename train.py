@@ -17,7 +17,7 @@ USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
 PATH="checkpoint/CG-3h/model.pth"
-RESUME_FROM= "checkpoint/CG-3h/model.pth" # pretrain weight or None
+RESUME_FROM= None # pretrain weight or None
 LEN=int(1e9)
 
 #---------数据参数------------
