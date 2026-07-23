@@ -2,6 +2,9 @@ runner/
 train_log.txt
 .venv/
 pretrain/
+tools/
+eval_data/*
+
 
 nohup.out
 # Python

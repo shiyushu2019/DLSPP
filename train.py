@@ -16,16 +16,15 @@ USE_CNN = True
 USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
-PATH="checkpoint/CG-3h/model.pth"
-RESUME_FROM= None # pretrain weight or None
+PATH="checkpoint/CG-uniform/model.pth"
+RESUME_FROM= "checkpoint/CG-uniform/model.pth" # pretrain weight or None
 LEN=int(1e9)
 
 #---------数据参数------------
 DO_STD=False
-MIN_JUMP=1
 
 #---------训练参数------------
-LR = 1e-3
+LR = 5e-5
 BATCH_SIZE = 512
 DROP_OUT=0.0
 WEIGHT_DECAY = 0.0
@@ -44,18 +43,18 @@ NUM_LAYERS = 10
 HIDDEN_SIZE=int(4096*3)
 
 #---------硬参数------------
-NUM_WORKERS=24
+NUM_WORKERS=12
 PREFETCH_FACTOR=2
 VAL_STEP=int(3000)
 MININTERVAL=60
-REVERSE_G=0
+REVERSE_G=20
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
 parser.add_argument('--lr', type=float, default=LR)
-parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
 parser.add_argument('--debug', type=bool, default=DEBUG)
+parser.add_argument('--reserve', type=int, default=0)
 
 model_args={
     "L":L,
@@ -89,39 +88,37 @@ gnn_config={
 }
 
 if __name__ == "__main__":
-    # 抢占富裕显存避免降速
-    reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
-
     args = parser.parse_args()
     LR=args.lr
-    MIN_JUMP=args.min_jump
     DEBUG=args.debug
-
+    REVERSE_G=args.reserve
+    
+    # 抢占富裕显存避免降速
+    reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
     if DEBUG:
         MININTERVAL=1
     
-    seed_bia=9
-    fakelist=FakeList(M,L,LEN//2,seed_bia) # min_jump 使用默认值
-    dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+    #  我们要让high_jump在 1，2，3，4中均匀选取,每个占四分之一
+    assert BATCH_SIZE%4==0
+    assert LEN%4==0
+
+    train_loaders=list()
+    for jump,seed_bia in zip([1,2,3,4],[1,2,3,4]):
+        fakelist=FakeList(M,L,LEN//4,seed_bia,min_jump=jump)
+        dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
+        loader = DataLoader(dataset, batch_size=BATCH_SIZE//4, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+        train_loaders.append(loader)
     
-    #--------为高jump设置单独训练数据集，用于按照50%参杂进入每个batch。程序确保batchsize和LEN是偶数----------
-    assert LEN%2==0 and BATCH_SIZE%2==0, "jump-divide need even LEN and batchsize"
-    seed_bia=4 # 9: 原来训练集 2：测试集 3：旧eval集
-    high_jump_fakelist=FakeList(M,L,LEN//2,seed_bia,min_jump=MIN_JUMP)
-    high_jump_dataset = MapRouteDataset(M,L,high_jump_fakelist,do_std=DO_STD)
-    high_jump_loader = DataLoader(high_jump_dataset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+    val_loaders=list()
+    val_len=10000
+    assert val_len%4==0
+    for jump,seed_bia in zip([1,2,3,4],[5,6,7,8]):
+        fakelist=FakeList(M,L,val_len//4,seed_bia,min_jump=jump)
+        dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
+        loader = DataLoader(dataset, batch_size=BATCH_SIZE//4, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+        val_loaders.append(loader)
 
-
-    seed_bia=2
-    val_fakelist=FakeList(M,L,10000,seed_bia)
-    val_dataset = MapRouteDataset(M,L,val_fakelist,do_std=DO_STD)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
-
-    val_len = len(val_dataset)
-    train_len = len(dataset)
-
-    print(f"训练集大小: {train_len}, 验证集大小: {val_len}")
+    print(f"训练集大小: {LEN}, 验证集大小: {val_len}")
 
     #  初始化模型、损失函数、优化器
     model = MyClassifier(**model_args, **cnn_config, **transformer_config,**gnn_config).to(DEVICE)
@@ -140,14 +137,16 @@ if __name__ == "__main__":
 
     if RESUME_FROM:
         begin=args.begin
-        assert begin%2==0, "begin must be even"
         print(f"从第 {begin} 条数据接续训练")
         from torch.utils.data import Subset
-        pair_num=begin//2
-        subset = Subset(dataset, range(pair_num, train_len))  # 不加载数据
-        loader = DataLoader(subset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)  # 依然懒加载
-        high_jump_subset = Subset(high_jump_dataset, range(pair_num, train_len))  # 不加载数据
-        high_jump_loader = DataLoader(high_jump_subset, batch_size=BATCH_SIZE//2, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)  # 依然懒加载
+        pair_num=begin//4  # 忽略除4误差
+        train_loaders=list()
+        for jump,seed_bia in zip([1,2,3,4],[1,2,3,4]):
+            fakelist=FakeList(M,L,LEN//4,seed_bia,min_jump=jump)
+            dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
+            dataset = Subset(dataset, range(pair_num, LEN//4))  # 取子集
+            loader = DataLoader(dataset, batch_size=BATCH_SIZE//4, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
+            train_loaders.append(loader)
 
         #--------eval---------
         model.eval()
@@ -155,7 +154,9 @@ if __name__ == "__main__":
         correct = 0
         total = 0
         with torch.no_grad():
-            for batch_x, batch_y in val_loader:
+            for (batch1_x, batch1_y),(batch2_x, batch2_y),(batch3_x, batch3_y),(batch4_x, batch4_y) in zip(*val_loaders):
+                batch_x = torch.cat([batch1_x, batch2_x, batch3_x, batch4_x], dim=0)
+                batch_y = torch.cat([batch1_y, batch2_y, batch3_y, batch4_y], dim=0)
                 batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
                 logits = model(batch_x)
                 loss = criterion(logits, batch_y.long())
@@ -166,7 +167,7 @@ if __name__ == "__main__":
                 correct += (preds == batch_y).sum().item()
                 total += batch_y.size(0)
         
-        avg_val_loss = val_loss / len(val_loader)
+        avg_val_loss = val_loss / len(val_loaders[0])
         val_acc = correct / total
         best_val_acc=val_acc
         scheduler.step(val_acc) 
@@ -178,16 +179,15 @@ if __name__ == "__main__":
             break
         model.train()
 
-        # ---------在训练时，把高jump数据参杂进来-------------
-        loop = tqdm(zip(loader,high_jump_loader), desc=f'Epoch {epoch+1}/{EPOCHS}',mininterval=MININTERVAL)
+        loop = tqdm(zip(*train_loaders), desc=f'Epoch {epoch+1}/{EPOCHS}',mininterval=MININTERVAL)
 
         batch_cnt=0
         cur_loss = 0.0
         
-        for (batch_x, batch_y),(high_jump_batch_x, high_jump_batch_y) in loop:
+        for (batch1_x, batch1_y),(batch2_x, batch2_y),(batch3_x, batch3_y),(batch4_x, batch4_y) in loop:
             model.train()
-            batch_x = torch.cat([batch_x, high_jump_batch_x], dim=0)
-            batch_y = torch.cat([batch_y, high_jump_batch_y], dim=0)
+            batch_x = torch.cat([batch1_x, batch2_x, batch3_x, batch4_x], dim=0)
+            batch_y = torch.cat([batch1_y, batch2_y, batch3_y, batch4_y], dim=0)
             batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
             logits = model(batch_x)
             loss = criterion(logits, batch_y.long())
@@ -210,7 +210,9 @@ if __name__ == "__main__":
                 correct = 0
                 total = 0
                 with torch.no_grad():
-                    for batch_x, batch_y in val_loader:
+                    for (batch1_x, batch1_y),(batch2_x, batch2_y),(batch3_x, batch3_y),(batch4_x, batch4_y) in zip(*val_loaders):
+                        batch_x = torch.cat([batch1_x, batch2_x, batch3_x, batch4_x], dim=0)
+                        batch_y = torch.cat([batch1_y, batch2_y, batch3_y, batch4_y], dim=0)
                         batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
                         logits = model(batch_x)
                         loss = criterion(logits, batch_y.long())
@@ -221,7 +223,7 @@ if __name__ == "__main__":
                         correct += (preds == batch_y).sum().item()
                         total += batch_y.size(0)
                 
-                avg_val_loss = val_loss / len(val_loader)
+                avg_val_loss = val_loss / len(val_loaders[0])
                 val_acc = correct / total
 
                 print(f"Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.4f}")

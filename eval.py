@@ -9,15 +9,13 @@ from train import (model_args,
                    cnn_config,
                    transformer_config,
                    gnn_config,
-                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD,MIN_JUMP)
+                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD)
 from model import MyClassifier
 
 # 设置容忍度
 parser = argparse.ArgumentParser()
 parser.add_argument("--tolerance", type=float, default=5e-2)
-parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
 args = parser.parse_args()
-MIN_JUMP=args.min_jump
 Tolerance = args.tolerance
 print(f"Using tolerance: {Tolerance}")
 
@@ -25,30 +23,6 @@ print(f"Using tolerance: {Tolerance}")
 """mluti-ans is considered"""
 IT_rng = np.random.default_rng(int(1e19))
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# 标准化
-if DO_STD:
-    adj_mean = (M - 1) / 2
-    adj_std = math.sqrt(((M - 1) ** 2) / 12)
-    coord_mean = (L - 1) / 2
-    coord_std = math.sqrt((L ** 2 - 1) / 12)
-    mean = torch.tensor(
-        [adj_mean] * (L * L) + [coord_mean] * 2,
-        dtype=torch.float32
-    )
-    std = torch.tensor(
-        [adj_std] * (L * L) + [coord_std] * 2,
-        dtype=torch.float32
-    )
-
-
-def generate_random_adjacency(n, rng=None,low=1, high=10):
-    """生成 n×n 随机邻接矩阵（完全图，正权）"""
-    if low == 0:
-        low = 1e-18  # avoid zero weights
-    mat = rng.uniform(low, high, size=(n, n)).astype(np.float32)
-    np.fill_diagonal(mat, 0)
-    return mat
 
 def dijkstra(adj, start, end):
     """Dijkstra 算法，返回 (最短距离, 路径节点列表)"""
@@ -90,33 +64,22 @@ if __name__ == "__main__":
     model.eval()
     print("模型权重加载成功")
 
+    inputs,labels=torch.load("eval_data/inputs.pt"),torch.load("eval_data/labels.pt")
+
     # ---------- 推理 ----------
-    TEST_LEN = int(1e4)
+    TEST_LEN = 10000
 
     model.eval()
     right=0
     origin_right=0
 
     with torch.no_grad():
-        for _ in tqdm(range(TEST_LEN),mininterval=1):
-            while(True):
-                #adj = generate_random_adjacency(L,rng=IT_rng,low=1,high=M)
-                adj = generate_random_adjacency(L, rng=IT_rng,low=0,high=M-1)
-                #start,end = IT_rng.sample(range(L), 2)
-                start, end = IT_rng.choice(L, size=2, replace=False)
-                Min,path = dijkstra(adj,start,end)
-                assert len(path)>1, "fix me"
-                if len(path)<2+MIN_JUMP:
-                    continue #只要路径长度大于等于 MIN_JUMP 的
-                else:
-                    break
-            #flat = [val for row in adj for val in row] + [start, end]
-            flat = adj.flatten().tolist() + [start, end]
-            map_tensor = torch.tensor(flat, dtype=torch.float32)
-            if DO_STD:
-                map_tensor = (map_tensor - mean) / (std + 1e-8)
-            batch=map_tensor.unsqueeze(0)
-            ans = path[1]
+        for i in tqdm(range(TEST_LEN),mininterval=1):
+            batch = inputs[i].to(DEVICE)
+            ans = labels[i].item()
+            adj = batch[0, :100].reshape(10, 10).tolist()
+            start, end = map(int,batch[0, -2:].cpu().tolist())
+            Min,_=dijkstra(adj,start,end)
             batch=batch.to(DEVICE)
             logits = model(batch)
             preds = torch.argmax(logits, dim=1).cpu().item()
