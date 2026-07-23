@@ -16,8 +16,8 @@ USE_CNN = True
 USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
-PATH="checkpoint/CG/model-jump4.pth"
-RESUME_FROM="checkpoint/CG/model.pth" # pretrain weight or None
+PATH="checkpoint/CG-3h/model.pth"
+RESUME_FROM= "checkpoint/CG-3h/model.pth" # pretrain weight or None
 LEN=int(1e9)
 
 #---------数据参数------------
@@ -41,7 +41,7 @@ M = 10
 INPUT_DIM = L * L + 2 
 OUTPUT_DIM = L     
 NUM_LAYERS = 10
-HIDDEN_SIZE=int(4096*2)
+HIDDEN_SIZE=int(4096*3)
 
 #---------硬参数------------
 NUM_WORKERS=24
@@ -50,6 +50,12 @@ VAL_STEP=int(3000)
 MININTERVAL=60
 REVERSE_G=0
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
+parser.add_argument('--lr', type=float, default=LR)
+parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
+parser.add_argument('--debug', type=bool, default=DEBUG)
 
 model_args={
     "L":L,
@@ -85,16 +91,14 @@ gnn_config={
 if __name__ == "__main__":
     # 抢占富裕显存避免降速
     reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
-    if DEBUG:
-        MININTERVAL=1
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
-    parser.add_argument('--lr', type=float, default=LR)
-    parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
+
     args = parser.parse_args()
     LR=args.lr
     MIN_JUMP=args.min_jump
+    DEBUG=args.debug
+
+    if DEBUG:
+        MININTERVAL=1
     
     seed_bia=9
     fakelist=FakeList(M,L,LEN//2,seed_bia) # min_jump 使用默认值
