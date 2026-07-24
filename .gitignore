@@ -4,6 +4,7 @@ train_log.txt
 pretrain/
 tools/
 eval_data/*
+nohup2.out
 
 
 nohup.out

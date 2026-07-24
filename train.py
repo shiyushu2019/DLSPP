@@ -19,7 +19,7 @@ USE_DIRECT = True
 PATH="checkpoint/guess/model.pth"
 RESUME_FROM="checkpoint/guess/model.pth" # pretrain weight or None
 LEN=int(1e9)
-VAL_LEN=int(3000)
+VAL_LEN=int(10000)
 
 #---------数据参数------------
 DO_STD=False
@@ -27,7 +27,7 @@ JUMP=1
 
 #---------训练参数------------
 LR = 5e-6
-BATCH_SIZE = 512
+BATCH_SIZE = 1024
 DROP_OUT=0.0
 WEIGHT_DECAY = 0.0
 EPOCHS = 1000
@@ -47,7 +47,7 @@ HIDDEN_SIZE=int(4096*2)
 #---------硬参数------------
 NUM_WORKERS=32
 PREFETCH_FACTOR=64
-VAL_STEP=int(150)
+VAL_STEP=int(1500)
 MININTERVAL=60
 REVERSE_G=0
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
