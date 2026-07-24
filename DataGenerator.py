@@ -47,12 +47,12 @@ def dijkstra(adj, start, end):
 
 class FakeList():
     def __init__(self,M,L,length,seed_bia,
-                 min_jump=1):
+                 jump=1):
         self.length=length
         self.seed_bia=seed_bia
         self.L=L
         self.M=M
-        self.min_jump=min_jump
+        self.jump=jump
     def __len__(self):
         return self.length
     def __getitem__(self,index):
@@ -71,8 +71,8 @@ class FakeList():
             _, path = dijkstra(adj, start, end)  # 完全图保证路径存在
 
             assert len(path)>1, "fix me"
-            if len(path)<2+self.min_jump:
-                continue #只要路径长度大于等于 min_jump 的
+            if len(path)!=2+self.jump:
+                continue #只要路径长度等于 jump 的
             
             # 按照格式：map = [邻接矩阵, [起点, 终点]]
             return {

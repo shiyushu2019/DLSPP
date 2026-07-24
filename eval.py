@@ -9,15 +9,17 @@ from train import (model_args,
                    cnn_config,
                    transformer_config,
                    gnn_config,
-                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD,MIN_JUMP)
+                   INPUT_DIM, OUTPUT_DIM,NUM_LAYERS,L,PATH,M,HIDDEN_SIZE,DROP_OUT,DO_STD,JUMP)
 from model import MyClassifier
+
+TEST_LEN = int(2000)
 
 # 设置容忍度
 parser = argparse.ArgumentParser()
 parser.add_argument("--tolerance", type=float, default=5e-2)
-parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
+parser.add_argument('--jump', type=int, default=JUMP)
 args = parser.parse_args()
-MIN_JUMP=args.min_jump
+JUMP=args.jump
 Tolerance = args.tolerance
 print(f"Using tolerance: {Tolerance}")
 
@@ -91,8 +93,6 @@ if __name__ == "__main__":
     print("模型权重加载成功")
 
     # ---------- 推理 ----------
-    TEST_LEN = int(1e4)
-
     model.eval()
     right=0
     origin_right=0
@@ -106,8 +106,8 @@ if __name__ == "__main__":
                 start, end = IT_rng.choice(L, size=2, replace=False)
                 Min,path = dijkstra(adj,start,end)
                 assert len(path)>1, "fix me"
-                if len(path)<2+MIN_JUMP:
-                    continue #只要路径长度大于等于 MIN_JUMP 的
+                if len(path)!=2+JUMP:
+                    continue #只要路径长度等于 JUMP 的
                 else:
                     break
             #flat = [val for row in adj for val in row] + [start, end]

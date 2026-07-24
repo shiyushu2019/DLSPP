@@ -16,16 +16,17 @@ USE_CNN = True
 USE_TRANSFORMER = True
 USE_GNN = True
 USE_DIRECT = True
-PATH="checkpoint/CG/model.pth"
-RESUME_FROM="checkpoint/CG/model.pth" # pretrain weight or None
+PATH="checkpoint/guess/model.pth"
+RESUME_FROM="checkpoint/guess/model.pth" # pretrain weight or None
 LEN=int(1e9)
+VAL_LEN=int(3000)
 
 #---------数据参数------------
 DO_STD=False
-MIN_JUMP=1
+JUMP=1
 
 #---------训练参数------------
-LR = 1e-3
+LR = 5e-6
 BATCH_SIZE = 512
 DROP_OUT=0.0
 WEIGHT_DECAY = 0.0
@@ -44,12 +45,19 @@ NUM_LAYERS = 10
 HIDDEN_SIZE=int(4096*2)
 
 #---------硬参数------------
-NUM_WORKERS=48
-PREFETCH_FACTOR=2
-VAL_STEP=int(3000)
+NUM_WORKERS=32
+PREFETCH_FACTOR=64
+VAL_STEP=int(150)
 MININTERVAL=60
 REVERSE_G=0
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
+parser.add_argument('--lr', type=float, default=LR)
+parser.add_argument('--jump', type=int, default=JUMP)
+parser.add_argument('--reserve', type=int, default=0)
+parser.add_argument('--debug', type=bool, default=DEBUG)
 
 model_args={
     "L":L,
@@ -83,25 +91,23 @@ gnn_config={
 }
 
 if __name__ == "__main__":
+    args = parser.parse_args()
+    LR=args.lr
+    JUMP=args.jump
+    REVERSE_G=args.reserve
+    DEBUG=args.debug
+
     # 抢占富裕显存避免降速
     reserved_tensor = torch.empty(1024 * 1024 *1024*REVERSE_G, dtype=torch.uint8).cuda()
     if DEBUG:
         MININTERVAL=1
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--begin', type=int, default=0) # 从现有权重开始训练时，从第x条数据开始
-    parser.add_argument('--lr', type=float, default=LR)
-    parser.add_argument('--min_jump', type=int, default=MIN_JUMP)
-    args = parser.parse_args()
-    LR=args.lr
-    MIN_JUMP=args.min_jump
-    
-    seed_bia=1
-    fakelist=FakeList(M,L,LEN,seed_bia,min_jump=MIN_JUMP)
+    seed_bia=3
+    fakelist=FakeList(M,L,LEN,seed_bia,jump=JUMP)
     dataset = MapRouteDataset(M,L,fakelist,do_std=DO_STD)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
-    seed_bia=2
-    val_fakelist=FakeList(M,L,10000,seed_bia,min_jump=MIN_JUMP)
+    seed_bia=4
+    val_fakelist=FakeList(M,L,VAL_LEN,seed_bia,jump=JUMP)
     val_dataset = MapRouteDataset(M,L,val_fakelist,do_std=DO_STD)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,prefetch_factor=PREFETCH_FACTOR)
 
