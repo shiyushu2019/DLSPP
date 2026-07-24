@@ -18,10 +18,7 @@ TEST_LEN = int(2000)
 parser = argparse.ArgumentParser()
 parser.add_argument("--tolerance", type=float, default=5e-2)
 parser.add_argument('--jump', type=int, default=JUMP)
-args = parser.parse_args()
-JUMP=args.jump
-Tolerance = args.tolerance
-print(f"Using tolerance: {Tolerance}")
+parser.add_argument('--test_len', type=int, default=TEST_LEN)
 
 """abbanden correspondence of indexes, use global random generator"""
 """mluti-ans is considered"""
@@ -86,6 +83,14 @@ def dijkstra(adj, start, end):
     return dist[end], path
 
 if __name__ == "__main__":
+    args = parser.parse_args()
+    JUMP=args.jump
+    Tolerance = args.tolerance
+    TEST_LEN=args.test_len
+    print(f"Using tolerance: {Tolerance}")
+    print(f"test_len: {TEST_LEN}")
+
+
     # ---------- 加载模型 ----------
     model = MyClassifier(**model_args, **cnn_config, **transformer_config,**gnn_config).to(DEVICE)
     model.load_state_dict(torch.load(PATH, map_location=DEVICE))
